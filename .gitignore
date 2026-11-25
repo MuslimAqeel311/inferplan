@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# Measurement output: YOUR machine's data, not the library.
+# ---------------------------------------------------------------------------
+# These are the single most important thing to keep out of the repo. A ledger
+# committed here would be read by anyone who clones it as if it described
+# THEIR GPU, and findings #31-#35 are about what happens when measurements
+# from one machine get used to model another. The library regenerates all of
+# this in about twenty minutes on whatever hardware it runs on.
+runs/
+logs/
+ledger.jsonl
+ledger.jsonl.*
+results.csv
+results.csv.*
+quality.json
+server.log
+*.log
+gpu_*.csv
+gpu_*.txt
+
+# ---------------------------------------------------------------------------
+# Python build and cache
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.whl
+*.tar.gz
+
+# ---------------------------------------------------------------------------
+# Environments
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+inferplan/lib/
+inferplan/bin/
+inferplan/include/
+pyvenv.cfg
+
+# ---------------------------------------------------------------------------
+# Model weights and caches - large, and not yours to redistribute
+# ---------------------------------------------------------------------------
+*.safetensors
+*.bin
+*.gguf
+.cache/
+huggingface/
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Secrets - never commit a token
+# ---------------------------------------------------------------------------
+.pypirc
+.env
+*.pem
+*.key

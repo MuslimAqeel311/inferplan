@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inferplan"
+version = "0.1.0a1"
+description = "Picks the cheapest vLLM serving configuration that still meets your latency and accuracy limits, by measuring a few on your own GPU and pricing the rest."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Muslim Aqeel" }]
+keywords = ["llm", "inference", "vllm", "serving", "benchmark", "cost"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: System :: Benchmark",
+]
+
+# aiohttp is the only one. The load generator needs many concurrent streaming
+# HTTP requests, which urllib cannot do; everything else - the HTTP calls in
+# the other modules, the least squares, the statistics - is standard library,
+# so there is no numpy to install.
+#
+# This list was empty on the first build because nothing checked it. The
+# wheel installed cleanly and then died on `import aiohttp` the first time a
+# command touched the benchmark. A dependency list is a claim about what the
+# package needs, and claims get verified: the check that caught it now lives
+# in tests/test_smoke.py and walks the AST of every module.
+#
+# vLLM is deliberately NOT here. The library measures whatever server is
+# already running, and pinning vLLM would mean fighting the user's version of
+# the very thing under test. `pip install inferplan[serve]` is for people who
+# want it to start the server too.
+dependencies = [
+  "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+# Only needed to serve models yourself rather than point the tools at a
+# server someone else started.
+serve = ["vllm>=0.6"]
+
+[project.scripts]
+inferplan = "inferplan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/muslimaqeel/inferplan"
+Issues = "https://github.com/muslimaqeel/inferplan/issues"
+
+[tool.setuptools]
+packages = ["inferplan"]

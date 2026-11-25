@@ -1,0 +1,86 @@
+name: tests
+
+# Runs on every push and pull request. No GPU is needed: test_smoke.py checks
+# that the package installs, that every module imports, that every command
+# actually executes its own --help, and that the declared dependencies cover
+# every third-party import. Those are exactly the four things that were
+# broken in 0.1.0 and were not caught by anyone looking at the code.
+#
+# The measurement tools themselves cannot be tested here - they need a vLLM
+# server on a real GPU - and that honest limit is why this file is small.
+# What it does cover is everything a user hits before their first benchmark.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the floor declared in pyproject.toml. Testing only the
+        # version on the developer's laptop is how a requires-python line
+        # becomes a guess.
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the package as a user would
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          # tomli is only needed by the dependency test on Python < 3.11,
+          # where tomllib is not in the standard library.
+          python -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" || pip install tomli
+
+      - name: Smoke tests
+        run: python tests/test_smoke.py
+
+      - name: The CLI runs from a directory that is not the repo
+        # Catches a module resolving a path against the working directory
+        # instead of against itself - the bug that made `inferplan sweep`
+        # unable to find its own benchmark script.
+        run: |
+          cd "$(mktemp -d)"
+          inferplan --version
+          inferplan plan --help > /dev/null
+          inferplan sweep --help > /dev/null
+
+      - name: A missing ledger is a message, not a traceback
+        run: |
+          cd "$(mktemp -d)"
+          out="$(inferplan fit 2>&1)" || true
+          echo "$out"
+          echo "$out" | grep -qi "no measurements yet" \
+            || { echo "expected a friendly message about the missing ledger"; exit 1; }
+          echo "$out" | grep -q "Traceback" \
+            && { echo "a traceback is not a message"; exit 1; }
+          exit 0
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the wheel and check its metadata
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          # twine check is what PyPI will run; failing here is cheaper than
+          # failing after an upload, because a version cannot be re-uploaded.
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
