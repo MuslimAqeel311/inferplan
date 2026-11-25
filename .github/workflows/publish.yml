@@ -29,6 +29,28 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: The tag and the package version must agree
+        # The fourth time today that one fact lived in two places: the
+        # dependency list, requires-python, __version__, and now the tag.
+        # v0.1.0a2 was pushed while pyproject.toml still said 0.1.0a1, which
+        # would have published a file whose name contradicted the release it
+        # came from. A version number is burned on upload, so this is checked
+        # BEFORE anything is built.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          pkg="$(python -c "
+          import tomllib, pathlib
+          print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])
+          ")"
+          echo "tag:     $tag"
+          echo "package: $pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match version $pkg in pyproject.toml"
+            echo "Bump the version, commit, then move the tag."
+            exit 1
+          fi
+
       - name: Build
         run: |
           python -m pip install --upgrade pip build twine
