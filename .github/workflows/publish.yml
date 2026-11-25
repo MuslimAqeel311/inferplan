@@ -1,0 +1,79 @@
+name: publish
+
+# Publishes to TestPyPI using PyPI's trusted publishing (OIDC), so there is no
+# API token anywhere in this repository or in its secrets. GitHub proves to
+# TestPyPI that this exact workflow, in this exact repository, is asking - and
+# a token that does not exist cannot be leaked.
+#
+# Runs when a tag like v0.1.0a1 is pushed, or manually from the Actions tab.
+# It deliberately does NOT run on every push: a version can never be
+# re-uploaded to PyPI, so publishing has to be a decision rather than a
+# side effect of committing.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the metadata the way PyPI will
+        # Cheaper to fail here than after an upload that cannot be undone.
+        run: twine check dist/*
+
+      - name: The wheel installs and the CLI runs
+        # Publishing something that does not install is the one mistake this
+        # job exists to prevent, so it is checked on the artifact that will
+        # actually be uploaded - not on the working tree.
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --quiet dist/*.whl
+          /tmp/verify/bin/inferplan --version
+          /tmp/verify/bin/inferplan plan --help > /dev/null
+          cd /tmp && /tmp/verify/bin/inferplan --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Must match the "Environment name" configured on the TestPyPI publisher.
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/inferplan
+
+    permissions:
+      # This is what lets GitHub mint the OIDC token TestPyPI verifies.
+      # Nothing else in the repository needs it, which is why it is granted
+      # here and not at the top of the file.
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # A re-run of this workflow should not fail just because the files
+          # are already there; a genuine version bump still uploads.
+          skip-existing: true
