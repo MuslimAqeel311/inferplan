@@ -443,6 +443,13 @@ def load_bench_runs(json_dir: Path) -> list:
         a = row.get("args") or {}
         if not a.get("label"):
             continue
+        # The reference control writes its own JSON with a _REF label. That is
+        # a machine-state reading, not a configuration anyone would deploy, and
+        # counting it as an "uncontrolled hand run" is doubly wrong: it IS the
+        # control. A first run from an empty ledger reported "including 1
+        # run(s) started by hand" when the only such file was the control's.
+        if a["label"].endswith("_REF"):
+            continue
         cfg = {}
         for src, dst in _BENCH_ARG_MAP.items():
             v = a.get(src)

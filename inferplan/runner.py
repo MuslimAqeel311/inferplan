@@ -94,8 +94,14 @@ class Config:
         return (self.model, self.quantization or "", self.dtype,
                 self.max_model_len, self.kv_cache_dtype)
 
-    def serve_args(self) -> list:
-        a = ["vllm", "serve", self.model,
+    def serve_args(self, vllm_bin: str = "vllm") -> list:
+        # The executable is a parameter because the library is often installed
+        # in a different environment from vLLM itself - it measures whatever
+        # server is running, so it should also be able to START a vLLM that
+        # lives elsewhere. --serve-cmd cannot do this job: it replaces the
+        # WHOLE command, flags included, so every config in a sweep would get
+        # identical settings and the sweep would measure nothing.
+        a = [vllm_bin, "serve", self.model,
              "--dtype", self.dtype,
              "--max-model-len", str(self.max_model_len),
              "--max-num-seqs", str(self.max_num_seqs),
@@ -379,7 +385,8 @@ def preflight_port(url: str, kill_stale: bool, log) -> bool:
 
 
 def start_server(cfg: Config, url: str, log_path: Path, timeout: float,
-                 serve_cmd: Optional[str], log):
+                 serve_cmd: Optional[str], log,
+                 vllm_bin: str = "vllm"):
     """
     Launch the server and wait until it is healthy.
 
@@ -389,7 +396,8 @@ def start_server(cfg: Config, url: str, log_path: Path, timeout: float,
     classify from its log) versus it never became healthy in time (a hang,
     which is a different observation).
     """
-    args = shlex.split(serve_cmd) if serve_cmd else cfg.serve_args()
+    args = (shlex.split(serve_cmd) if serve_cmd
+            else cfg.serve_args(vllm_bin))
     log(f"  $ {' '.join(args)}")
 
     env = dict(os.environ)
@@ -421,6 +429,18 @@ def start_server(cfg: Config, url: str, log_path: Path, timeout: float,
         if rc is not None:
             elapsed = time.time() - t0
             log(f"  server exited with code {rc} after {elapsed:.1f}s")
+            if rc == 0:
+                # Exit code 0 is not a crash: the command ran, did nothing,
+                # and was content. In practice that means it was not a server
+                # command at all - usually a --serve-cmd with the executable
+                # but no arguments, which makes vllm print its usage and
+                # leave. Calling that "DIED" sends the reader looking for an
+                # out-of-memory error that never happened.
+                log(f"  exit code 0 means it did not fail - it did nothing.")
+                log(f"  That is what a server command with no arguments does.")
+                log(f"  Check --serve-cmd, or use --vllm-bin to point at a")
+                log(f"  vllm in another environment and keep the flags.")
+                return None, elapsed, "NOT_A_SERVER"
             return None, elapsed, "DIED"
 
         if time.time() - t0 > timeout:
@@ -583,7 +603,8 @@ def run_reference(args, log, model: str) -> tuple:
         return None, "another server holds the port"
     proc, startup_s, reason = start_server(cfg, args.url, log_path,
                                            args.startup_timeout,
-                                           args.serve_cmd, log)
+                                           args.serve_cmd, log,
+                                           args.vllm_bin)
     if proc is None:
         return None, f"the reference server would not start ({reason})"
     try:
@@ -734,8 +755,16 @@ def main():
                     help="skip configs already in the ledger")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan and exit; nothing is started")
+    ap.add_argument("--vllm-bin", default="vllm",
+                    help="path to the vllm executable, when it lives in a "
+                         "different environment from this library, e.g. "
+                         "~/myenv/bin/vllm. Unlike --serve-cmd this keeps "
+                         "every config's own flags, so sweeps still work.")
     ap.add_argument("--serve-cmd", default=None,
-                    help="override the server command (testing only)")
+                    help="replace the ENTIRE server command, flags included. "
+                         "Every config then gets identical settings, so this "
+                         "is for testing one server, not for sweeps. To point "
+                         "at a vllm elsewhere, use --vllm-bin.")
     ap.add_argument("--limit", type=int, default=0,
                     help="run at most N configs")
     ap.add_argument("--slots", default=None,
@@ -852,7 +881,9 @@ def main():
                 log("  every row will carry contaminated=true")
                 contaminated = True
                 return True
-            log("  stopping. Fix it and start again:  python serve.py --stop")
+            stop_hint = ("inferplan serve --stop" if __package__
+                         else "python serve.py --stop")
+            log(f"  stopping. Fix it and start again:  {stop_hint}")
             contaminated = True
             return False
         verdict = ref.add(position, tok_s)
@@ -946,7 +977,7 @@ def main():
 
         proc, startup_s, reason = start_server(
             effective, args.url, log_path, args.startup_timeout,
-            args.serve_cmd, log)
+            args.serve_cmd, log, args.vllm_bin)
         row["startup_seconds"] = round(startup_s, 2)
 
         if proc is None:

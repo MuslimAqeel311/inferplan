@@ -106,6 +106,9 @@ def main():
     ap.add_argument("--gpu-memory-utilization", type=float, default=0.70)
     ap.add_argument("--kv-cache-dtype", default="auto")
     ap.add_argument("--no-prefix-caching", action="store_true")
+    ap.add_argument("--vllm-bin", default="vllm",
+                    help="path to the vllm executable, for when it lives in "
+                         "a different environment from this library")
     ap.add_argument("--log", default="server.log")
     ap.add_argument("--timeout", type=float, default=600)
     ap.add_argument("--stop", action="store_true",
@@ -133,7 +136,7 @@ def main():
     else:
         print("  GPU is clear")
 
-    cmd = ["vllm", "serve", args.model,
+    cmd = [args.vllm_bin, "serve", args.model,
            "--dtype", args.dtype,
            "--max-model-len", str(args.max_model_len),
            "--max-num-seqs", str(args.max_num_seqs),
@@ -156,8 +159,9 @@ def main():
                                     start_new_session=True)
     except FileNotFoundError:
         print()
-        print("  'vllm' was not found on PATH.")
-        print("  Activate the environment first:  source ~/inferplan/bin/activate")
+        print(f"  {args.vllm_bin!r} was not found.")
+        print("  Activate the environment that has vLLM, or pass")
+        print("  --vllm-bin /path/to/venv/bin/vllm to use one elsewhere.")
         return 4
     except OSError as e:
         print(f"  could not start the server: {type(e).__name__}: {e}")

@@ -838,6 +838,25 @@ def rank(cands: list, noise_pct: float) -> list:
 # ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
+def how_to_run(module: str) -> str:
+    """
+    How the READER would invoke another part of this library.
+
+    Installed, there is no quality.py to run - there is `inferplan quality`.
+    Printing the developer's filename tells the user to run something they do
+    not have, and this is the fifth place today that did it: the VERIFY IT
+    block, the sweep hint, the stop hint, the completion-length note, and
+    here. One function, so there is one place to be wrong.
+    """
+    commands = {"runner": "sweep", "costmodel": "fit", "planner": "plan",
+                "quality": "quality", "bench": "bench", "serve": "serve",
+                "gpuwatch": "watch", "mergeledger": "merge",
+                "repairledger": "repair"}
+    if __package__:
+        return f"inferplan {commands.get(module, module)}"
+    return f"python {module}.py"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ledger", default="ledger.jsonl")
@@ -899,7 +918,7 @@ def main():
     # not a bug, so it gets a sentence instead of a traceback. The first
     # impression a tool makes is the error it shows someone who has done
     # nothing wrong yet.
-    sweep_hint = ("inferplan sweep" if __package__ else "python runner.py")
+    sweep_hint = how_to_run("runner")
     try:
         runs = load_runs(Path(args.ledger))
         all_runs = load_all_runs(Path(args.ledger), Path(args.runs_dir))
@@ -997,14 +1016,14 @@ def main():
               f" (from {args.quality})")
     else:
         print(f"  accuracy         : NOT MEASURED - using fallback estimates. "
-              f"Run quality.py.")
+              f"Run {how_to_run('quality')}.")
     print(f"  searched         : {len(space)} configurations, "
           f"{len(best)} feasible")
     print(f"  model fitted on  : {cm.n_runs} measured runs, noise floor "
           f"{cm.noise_floor_pct:.1f}%")
     if n_bench:
         print(f"                     including {n_bench} run(s) started by hand "
-              f"through bench.py, which are")
+              f"through {how_to_run('bench')}, which are")
         print(f"                     RECORDED ONLY: nothing vouched for the "
               f"machine state they")
         print(f"                     ran in, so they cap nothing and only raise "
@@ -1081,7 +1100,8 @@ def main():
               f"{acc_measured[q]})")
     elif top.accuracy_drop_pct:
         print(f"  accuracy drop    : {top.accuracy_drop_pct:.1f}%  "
-              f"(ESTIMATE, not measured on this model - run quality.py)")
+              f"(ESTIMATE, not measured on this model - run "
+              f"{how_to_run('quality')})")
     else:
         print(f"  accuracy drop    : none; this is full precision")
     print(f"  needs free VRAM  : {top.required_free_mib:.0f} MiB")
