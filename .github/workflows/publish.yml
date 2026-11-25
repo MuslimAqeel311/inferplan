@@ -9,6 +9,11 @@ name: publish
 # It deliberately does NOT run on every push: a version can never be
 # re-uploaded to PyPI, so publishing has to be a decision rather than a
 # side effect of committing.
+#
+# TestPyPI publishes automatically. Real PyPI waits for a human click, through
+# a GitHub environment with a required reviewer. That is not ceremony: a wrong
+# tag on TestPyPI costs nothing, and the same tag on PyPI is permanent - the
+# version number is burned whether the upload was right or not.
 
 on:
   push:
@@ -77,3 +82,32 @@ jobs:
           # A re-run of this workflow should not fail just because the files
           # are already there; a genuine version bump still uploads.
           skip-existing: true
+
+  pypi:
+    # Only after TestPyPI succeeded, so the files have already been uploaded
+    # somewhere once and survived it.
+    needs: [build, testpypi]
+    runs-on: ubuntu-latest
+
+    # Must match the "Environment name" on the PyPI publisher. Put a required
+    # reviewer on this environment in the repository settings: that is what
+    # turns this job into a decision you make rather than one a tag makes for
+    # you.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/inferplan
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No skip-existing here, unlike TestPyPI. On the real index a
+        # "file already exists" error is information worth seeing: it means
+        # this version went out before, and silently passing would hide that.
