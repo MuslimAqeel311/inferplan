@@ -22,10 +22,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.9 is the floor declared in pyproject.toml. Testing only the
-        # version on the developer's laptop is how a requires-python line
-        # becomes a guess.
-        python-version: ["3.9", "3.12"]
+        # The floor declared in pyproject.toml, and the latest. Testing only
+        # the version on the developer's laptop is how a requires-python line
+        # becomes a guess: the first CI run rejected ">=3.9" because
+        # sys.stdlib_module_names needs 3.10, and that line had been shipped.
+        python-version: ["3.10", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -55,13 +56,33 @@ jobs:
           inferplan plan --help > /dev/null
           inferplan sweep --help > /dev/null
 
-      - name: A missing ledger is a message, not a traceback
+      - name: Every refusal is a message, not a traceback
+        # There is no GPU on this runner, so the tool has to explain two
+        # separate absences clearly. The first version of this step assumed
+        # the missing ledger would be reported first and failed on the
+        # bandwidth message instead - the test was wrong, not the tool.
         run: |
           cd "$(mktemp -d)"
+
+          echo "--- no GPU detected, and no bandwidth given ---"
           out="$(inferplan fit 2>&1)" || true
+          echo "$out"
+          echo "$out" | grep -qi "bandwidth" \
+            || { echo "expected it to say what it needs"; exit 1; }
+          echo "$out" | grep -q "Traceback" \
+            && { echo "a traceback is not a message"; exit 1; }
+
+          echo "--- bandwidth supplied, but no measurements exist ---"
+          out="$(inferplan fit --bandwidth-gbps 192 2>&1)" || true
           echo "$out"
           echo "$out" | grep -qi "no measurements yet" \
             || { echo "expected a friendly message about the missing ledger"; exit 1; }
+          echo "$out" | grep -q "Traceback" \
+            && { echo "a traceback is not a message"; exit 1; }
+
+          echo "--- and the planner refuses the same way ---"
+          out="$(inferplan plan --rate 20 --bandwidth-gbps 192 2>&1)" || true
+          echo "$out"
           echo "$out" | grep -q "Traceback" \
             && { echo "a traceback is not a message"; exit 1; }
           exit 0
