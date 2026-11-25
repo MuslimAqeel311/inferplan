@@ -24,9 +24,9 @@ import sys
 
 PKG = pathlib.Path(__file__).resolve().parent.parent / "inferplan"
 MODULES = ["bench", "runner", "costmodel", "planner", "quality",
-           "serve", "gpuwatch", "mergeledger", "cli"]
+           "serve", "gpuwatch", "mergeledger", "repairledger", "cli"]
 COMMANDS = ["serve", "bench", "sweep", "fit", "plan", "quality",
-            "watch", "merge"]
+            "watch", "merge", "repair"]
 
 
 def _py_files():
@@ -136,6 +136,29 @@ def test_unknown_command_is_an_error():
     p = subprocess.run([sys.executable, "-m", "inferplan.cli", "bogus"],
                        capture_output=True, text=True, timeout=60)
     assert p.returncode == 2, f"expected rc=2, got {p.returncode}"
+
+
+def test_version_matches_the_packaging_metadata():
+    """
+    `inferplan --version` must agree with the version in pyproject.toml.
+
+    It did not: the wheel was 0.1.0a1 and the CLI printed 0.1.0, because
+    __init__.py had the number hard-coded. Nothing compared them until a
+    TestPyPI install was checked by hand.
+    """
+    import subprocess
+    try:
+        import tomllib
+    except ModuleNotFoundError:          # Python 3.10
+        import tomli as tomllib          # type: ignore
+    declared = tomllib.loads(
+        (PKG.parent / "pyproject.toml").read_text())["project"]["version"]
+    import inferplan
+    assert inferplan.__version__ == declared, (
+        f"__init__ says {inferplan.__version__}, pyproject says {declared}")
+    out = subprocess.run([sys.executable, "-m", "inferplan.cli", "--version"],
+                         capture_output=True, text=True, timeout=60).stdout
+    assert declared in out, f"--version printed {out.strip()!r}"
 
 
 def test_runner_finds_the_benchmark_it_shells_out_to():

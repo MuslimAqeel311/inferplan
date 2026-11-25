@@ -28,11 +28,26 @@ The modules, in the order a session uses them:
     quality      measure what quantization costs in output quality
     gpuwatch     sample the GPU during a run and say what it saw
     mergeledger  combine ledgers from several machines or sessions
+    repairledger re-pair ledger rows with their own benchmark records
 """
 
-__version__ = "0.1.0"
+# Read from the installed package metadata, which pyproject.toml is the only
+# source of. Hard-coding it here made `inferplan --version` print 0.1.0 while
+# the wheel on TestPyPI was 0.1.0a1 - the same version claimed in two places,
+# with nothing comparing them. That is the shape of the dependency-list bug
+# (finding #38) and the requires-python bug: a fact stated twice is a fact
+# that will eventually disagree with itself.
+try:
+    from importlib.metadata import PackageNotFoundError, version as _version
+    try:
+        __version__ = _version("inferplan")
+    except PackageNotFoundError:
+        # Running from a source checkout that was never installed.
+        __version__ = "0.0.0+local"
+except ImportError:                      # pragma: no cover
+    __version__ = "0.0.0+unknown"
 
 __all__ = [
-    "bench", "runner", "costmodel", "planner",
-    "quality", "serve", "gpuwatch", "mergeledger",
+    "bench", "runner", "costmodel", "planner", "quality",
+    "serve", "gpuwatch", "mergeledger", "repairledger",
 ]
