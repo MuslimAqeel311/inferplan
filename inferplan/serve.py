@@ -177,7 +177,12 @@ def main():
             if used is not None:
                 print(f"  GPU holds {used} of {total} MiB")
             print("=" * 70)
-            print(f"  stop it with: python serve.py --stop")
+            # Sixth place today that printed a filename the reader may not
+            # have. Installed, there is no serve.py - there is
+            # `inferplan serve --stop`.
+            stop_cmd = ("inferplan serve --stop" if __package__
+                        else "python serve.py --stop")
+            print(f"  stop it with: {stop_cmd}")
             return 0
 
         rc = proc.poll()

@@ -1155,9 +1155,23 @@ def main():
     # skip.
     sweep_cmd = ("inferplan sweep" if __package__
                  else f"python {Path(__file__).name.replace('planner', 'runner')}")
-    print(f"  {sweep_cmd} --slots {top.config['max_num_seqs']} "
-          f"--reference-every 1 \\")
-    print(f"    --repeat 3 --slo-ms {args.p99_ms or 2000:.0f}")
+    # The verify command must reproduce the WORKLOAD, not just the slot
+    # count. It did not: a plan for 500 output tokens printed a command that
+    # measured 128, and the two numbers - 4397 ms predicted, 1201 ms measured
+    # - were compared as though they described the same thing. A verification
+    # that measures something else is worse than none, because it looks like
+    # agreement or disagreement when it is neither.
+    verify = [f"{sweep_cmd} --slots {top.config['max_num_seqs']}",
+              "--reference-every 1",
+              f"--max-tokens {req.output_tokens}",
+              "--repeat 3",
+              f"--slo-ms {args.p99_ms or 2000:.0f}"]
+    if req.shared_prefix_tokens:
+        verify.append(f"--shared-prefix-tokens {req.shared_prefix_tokens}")
+    print(f"  {verify[0]} \\")
+    for part in verify[1:-1]:
+        print(f"    {part} \\")
+    print(f"    {verify[-1]}")
     print()
     print(f"  That brackets the run with a reference measurement, so a result")
     print(f"  taken while the machine was drifting is reported as such rather")

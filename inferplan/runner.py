@@ -767,6 +767,14 @@ def main():
                          "at a vllm elsewhere, use --vllm-bin.")
     ap.add_argument("--limit", type=int, default=0,
                     help="run at most N configs")
+    ap.add_argument("--max-tokens", type=int, default=None,
+                    help="output tokens per request, to match the workload a "
+                         "plan was made for. Without this a sweep always "
+                         "measures 128, so verifying a plan built for 500 "
+                         "output tokens compares two different workloads.")
+    ap.add_argument("--shared-prefix-tokens", type=int, default=None,
+                    help="identical preamble on every request, for workloads "
+                         "with a shared system prompt")
     ap.add_argument("--slots", default=None,
                     help="comma-separated slot counts to measure, e.g. "
                          "32 or 64,96,128. Overrides --sweep. Exists so the "
@@ -816,6 +824,17 @@ def main():
 
     done = load_done(Path(args.ledger)) if args.resume else set()
     todo = [c for c in configs if c.label() not in done]
+    # Workload overrides apply to whatever sweep was selected, because the
+    # point of them is to reproduce a specific plan's workload.
+    if args.max_tokens or args.shared_prefix_tokens is not None:
+        configs = [replace(
+            c,
+            max_tokens=args.max_tokens or c.max_tokens,
+            shared_prefix_tokens=(c.shared_prefix_tokens
+                                  if args.shared_prefix_tokens is None
+                                  else args.shared_prefix_tokens),
+        ) for c in configs]
+
     if args.limit:
         todo = todo[:args.limit]
 
